@@ -59,6 +59,7 @@ fun StoreScreen(
     repository: AppRepository,
     installedAppsRevision: Int,
     installedVersionCode: (String) -> Long?,
+    installedVersionName: (String) -> String?,
     openInstalledApp: (String) -> Boolean,
     canInstallPackages: () -> Boolean,
     requestInstallPermission: () -> Unit,
@@ -184,6 +185,9 @@ fun StoreScreen(
                         val installedCode = remember(app.id, installedAppsRevision) {
                             installedVersionCode(app.id)
                         }
+                        val installedName = remember(app.id, installedAppsRevision) {
+                            installedVersionName(app.id)
+                        }
                         val action = when {
                             installedCode == null -> AppAction.INSTALL
                             app.versionCode > installedCode -> AppAction.UPDATE
@@ -193,7 +197,7 @@ fun StoreScreen(
                         AppCard(
                             app = app,
                             action = action,
-                            installedVersionCode = installedCode,
+                            installedVersionName = installedName,
                             installing = installingId == app.id,
                             progress = installProgress,
                             onOpenDetails = { selectedApp = app },
@@ -277,7 +281,7 @@ fun StoreScreen(
 private fun AppCard(
     app: StoreApp,
     action: AppAction,
-    installedVersionCode: Long?,
+    installedVersionName: String?,
     installing: Boolean,
     progress: Int,
     onOpenDetails: () -> Unit,
@@ -312,9 +316,9 @@ private fun AppCard(
                             append(app.version)
                             append(" • ")
                             append(app.sourceName)
-                            if (installedVersionCode != null) {
+                            if (installedVersionName != null) {
                                 append(" • installiert: ")
-                                append(installedVersionCode)
+                                append(installedVersionName)
                             }
                         },
                         style = MaterialTheme.typography.labelMedium,
