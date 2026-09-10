@@ -21,7 +21,7 @@ data class AppSource(val name: String, val indexUrl: String)
 
 class AppRepository {
     val sources = listOf(
-        AppSource("Freetime F-Droid", "https://fdroid.free-time.me/repo/index-v1.json"),
+        AppSource("Freetime F-Droid Repository", "https://fdroid.free-time.me/repo/index-v1.json"),
         AppSource("F-Droid", "https://f-droid.org/repo/index-v1.json")
     )
 

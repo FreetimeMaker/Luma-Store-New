@@ -25,7 +25,7 @@ object ApkInstaller {
                 connection.connectTimeout = 15_000
                 connection.readTimeout = 60_000
                 connection.instanceFollowRedirects = true
-                connection.setRequestProperty("User-Agent", "Luma-Store/1.0")
+                connection.setRequestProperty("User-Agent", "Luma-Store")
                 val total = connection.contentLengthLong
                 connection.inputStream.use { input ->
                     target.outputStream().use { output ->
