@@ -8,20 +8,26 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.mutableIntStateOf
 import com.freetime.lumastore.data.AppRepository
 import com.freetime.lumastore.install.ApkInstaller
 import com.freetime.lumastore.ui.theme.LumaStoreTheme
 
 class MainActivity : ComponentActivity() {
     private val repository = AppRepository()
+    private val installedAppsRevision = mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            val revision = installedAppsRevision.intValue
             LumaStoreTheme {
                 StoreScreen(
                     repository = repository,
+                    installedAppsRevision = revision,
+                    installedVersionCode = { packageName -> installedVersionCode(packageName) },
+                    openInstalledApp = { packageName -> openInstalledApp(packageName) },
                     canInstallPackages = { canInstallUnknownApps() },
                     requestInstallPermission = { openInstallPermission() },
                     install = { app, onProgress, onReady, onError ->
@@ -37,6 +43,28 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        installedAppsRevision.intValue++
+    }
+
+    private fun installedVersionCode(packageName: String): Long? = runCatching {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
+        }
+    }.getOrNull()
+
+    private fun openInstalledApp(packageName: String): Boolean {
+        val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+        return true
     }
 
     private fun canInstallUnknownApps(): Boolean =
