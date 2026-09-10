@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
                     repository = repository,
                     installedAppsRevision = revision,
                     installedVersionCode = { packageName -> installedVersionCode(packageName) },
+                    installedVersionName = { packageName -> installedVersionName(packageName) },
                     openInstalledApp = { packageName -> openInstalledApp(packageName) },
                     canInstallPackages = { canInstallUnknownApps() },
                     requestInstallPermission = { openInstallPermission() },
@@ -58,6 +59,10 @@ class MainActivity : ComponentActivity() {
             @Suppress("DEPRECATION")
             info.versionCode.toLong()
         }
+    }.getOrNull()
+
+    private fun installedVersionName(packageName: String): String? = runCatching {
+        packageManager.getPackageInfo(packageName, 0).versionName
     }.getOrNull()
 
     private fun openInstalledApp(packageName: String): Boolean {
