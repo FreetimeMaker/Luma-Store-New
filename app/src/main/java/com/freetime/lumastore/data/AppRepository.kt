@@ -13,6 +13,8 @@ data class StoreApp(
     val version: String,
     val versionCode: Long,
     val iconUrl: String?,
+    val screenshotUrls: List<String>,
+    val categories: List<String>,
     val apkUrl: String,
     val sourceName: String
 )
@@ -83,11 +85,39 @@ class AppRepository {
                 val version = best ?: return@forEach
                 val apkName = version.optString("apkName")
                 if (apkName.isBlank()) return@forEach
+
                 val metadata = metadataByPackage[packageName] ?: JSONObject()
-                val name = metadata.optString("name").ifBlank { packageName.substringAfterLast('.') }
-                val summary = metadata.optString("summary")
-                val description = metadata.optString("description").ifBlank { summary }
-                val iconName = metadata.optString("icon").takeIf { it.isNotBlank() }
+                val localizedPair = preferredLocalized(metadata)
+                val locale = localizedPair?.first
+                val localized = localizedPair?.second
+
+                val name = localized?.optString("name")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: metadata.optString("name").ifBlank { packageName.substringAfterLast('.') }
+                val summary = localized?.optString("summary")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: metadata.optString("summary")
+                val description = localized?.optString("description")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: metadata.optString("description").ifBlank { summary }
+                val categories = jsonStrings(metadata.optJSONArray("categories"))
+
+                val localizedIcon = localized?.optString("icon")?.takeIf { it.isNotBlank() }
+                val legacyIcon = metadata.optString("icon").takeIf { it.isNotBlank() }
+                val iconUrl = when {
+                    localizedIcon != null && locale != null ->
+                        resolveUrl(source.indexUrl, "$packageName/$locale/$localizedIcon")
+                    legacyIcon != null -> resolveUrl(source.indexUrl, "icons-640/$legacyIcon")
+                    else -> null
+                }
+
+                val screenshotUrls = if (localized != null && locale != null) {
+                    jsonStrings(localized.optJSONArray("phoneScreenshots")).map { file ->
+                        resolveUrl(source.indexUrl, "$packageName/$locale/phoneScreenshots/$file")
+                    }
+                } else {
+                    emptyList()
+                }
 
                 result += StoreApp(
                     id = packageName,
@@ -96,7 +126,9 @@ class AppRepository {
                     description = description,
                     version = version.optString("versionName").ifBlank { bestCode.toString() },
                     versionCode = bestCode.coerceAtLeast(0),
-                    iconUrl = iconName?.let { resolveUrl(source.indexUrl, "icons-640/$it") },
+                    iconUrl = iconUrl,
+                    screenshotUrls = screenshotUrls,
+                    categories = categories,
                     apkUrl = resolveUrl(source.indexUrl, apkName),
                     sourceName = source.name
                 )
@@ -104,6 +136,29 @@ class AppRepository {
             return result
         } finally {
             connection.disconnect()
+        }
+    }
+
+    private fun preferredLocalized(metadata: JSONObject): Pair<String, JSONObject>? {
+        val localized = metadata.optJSONObject("localized") ?: return null
+        val locales = listOf("de-DE", "de", "en-US", "en")
+        locales.forEach { locale ->
+            localized.optJSONObject(locale)?.let { return locale to it }
+        }
+        val keys = localized.keys()
+        if (keys.hasNext()) {
+            val locale = keys.next()
+            localized.optJSONObject(locale)?.let { return locale to it }
+        }
+        return null
+    }
+
+    private fun jsonStrings(array: JSONArray?): List<String> {
+        if (array == null) return emptyList()
+        return buildList {
+            for (i in 0 until array.length()) {
+                array.optString(i).takeIf { it.isNotBlank() }?.let(::add)
+            }
         }
     }
 
