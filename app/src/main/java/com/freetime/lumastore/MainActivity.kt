@@ -1,47 +1,55 @@
 package com.freetime.lumastore
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import com.freetime.lumastore.data.AppRepository
+import com.freetime.lumastore.install.ApkInstaller
 import com.freetime.lumastore.ui.theme.LumaStoreTheme
 
 class MainActivity : ComponentActivity() {
+    private val repository = AppRepository()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             LumaStoreTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                StoreScreen(
+                    repository = repository,
+                    canInstallPackages = { canInstallUnknownApps() },
+                    requestInstallPermission = { openInstallPermission() },
+                    install = { app, onProgress, onReady, onError ->
+                        ApkInstaller.downloadAndInstall(
+                            context = this,
+                            packageName = app.id,
+                            apkUrl = app.apkUrl,
+                            onProgress = { runOnUiThread { onProgress(it) } },
+                            onReady = { runOnUiThread(onReady) },
+                            onError = { error -> runOnUiThread { onError(error) } }
+                        )
+                    }
+                )
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
+    private fun canInstallUnknownApps(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    LumaStoreTheme {
-        Greeting("Android")
+    private fun openInstallPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        }
     }
 }
