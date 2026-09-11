@@ -85,8 +85,10 @@ fun StoreScreen(
         context.applicationContext.getSharedPreferences(SOURCE_PREFERENCES, Context.MODE_PRIVATE)
     }
 
-    var apps by remember { mutableStateOf<List<StoreApp>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+    val initialCachedApps = remember(repository) { repository.loadCachedApps() }
+    var apps by remember { mutableStateOf(initialCachedApps) }
+    var loading by remember { mutableStateOf(initialCachedApps.isEmpty()) }
+    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -99,16 +101,24 @@ fun StoreScreen(
     val selectedSources = remember { mutableStateMapOf<String, String>() }
 
     LaunchedEffect(refreshKey) {
-        loading = true
+        if (apps.isEmpty()) {
+            loading = true
+        } else {
+            refreshing = true
+        }
         error = null
+
         val result = withContext(Dispatchers.IO) { repository.loadApps() }
         result.onSuccess {
             apps = it
-            loading = false
         }.onFailure {
-            error = it.message ?: "Die App-Quellen konnten nicht geladen werden."
-            loading = false
+            if (apps.isEmpty()) {
+                error = it.message ?: "Die App-Quellen konnten nicht geladen werden."
+            }
         }
+
+        loading = false
+        refreshing = false
     }
 
     val variantsById = apps.groupBy { it.id }
@@ -181,6 +191,10 @@ fun StoreScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (refreshing) {
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
             Spacer(Modifier.height(14.dp))
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -557,14 +571,19 @@ private fun AppIcon(app: StoreApp, size: Int) {
             modifier = Modifier
                 .size(size.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(MaterialTheme.colorScheme.secondaryContainer),
             contentAlignment = Alignment.Center
         ) {
-            Text(app.name.take(1).uppercase(), fontWeight = FontWeight.Bold)
+            Text(
+                app.name.take(1).uppercase(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
 
 private fun variantKey(app: StoreApp): String = "${app.id}\u0000${app.sourceName}"
 
-private fun sourcePreferenceKey(appId: String): String = SOURCE_KEY_PREFIX + appId
+private fun sourcePreferenceKey(packageName: String): String =
+    SOURCE_KEY_PREFIX + packageName
