@@ -44,15 +44,19 @@ class AppRepository(context: Context) {
 
     private val defaultSources = listOf(
         AppSource(
-            name = "Freetime F-Droid Repository",
+            name = "Freetime F-Droid",
             indexUrl = "https://fdroid.free-time.me/repo/index-v1.json"
         ),
         AppSource(
-            name = "F-Droid Repository",
+            name = "F-Droid",
             indexUrl = "https://f-droid.org/repo/index-v1.json"
         ),
         AppSource(
-            name = "Luma Store API",
+            name = "IzzyOnDroid",
+            indexUrl = "https://apt.izzysoft.de/fdroid/repo/index-v1.json"
+        ),
+        AppSource(
+            name = "Luma Store",
             indexUrl = "https://api.free-time.me/v2/lumastore/apps",
             type = SourceType.LUMA_API
         )
