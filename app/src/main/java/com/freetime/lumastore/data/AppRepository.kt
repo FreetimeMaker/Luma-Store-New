@@ -36,6 +36,10 @@ class AppRepository(context: Context) {
         CACHE_PREFERENCES,
         Context.MODE_PRIVATE
     )
+    private val sourcePreferences = context.applicationContext.getSharedPreferences(
+        SOURCE_PREFERENCES,
+        Context.MODE_PRIVATE
+    )
 
     val sources = listOf(
         AppSource(
@@ -53,18 +57,35 @@ class AppRepository(context: Context) {
         )
     )
 
+    fun isSourceEnabled(source: AppSource): Boolean =
+        sourcePreferences.getBoolean(sourcePreferenceKey(source), true)
+
+    fun setSourceEnabled(source: AppSource, enabled: Boolean) {
+        sourcePreferences.edit()
+            .putBoolean(sourcePreferenceKey(source), enabled)
+            .apply()
+    }
+
+    fun enabledSources(): List<AppSource> = sources.filter(::isSourceEnabled)
+
     fun loadCachedApps(): List<StoreApp> {
         val raw = cachePreferences.getString(CACHE_KEY_APPS, null) ?: return emptyList()
-        return runCatching { parseCachedApps(raw) }.getOrDefault(emptyList())
+        val enabledSourceNames = enabledSources().mapTo(mutableSetOf()) { it.name }
+        return runCatching { parseCachedApps(raw) }
+            .getOrDefault(emptyList())
+            .filter { it.sourceName in enabledSourceNames }
     }
 
     fun cacheTimestamp(): Long = cachePreferences.getLong(CACHE_KEY_TIMESTAMP, 0L)
 
     fun loadApps(): Result<List<StoreApp>> = runCatching {
+        val activeSources = enabledSources()
+        if (activeSources.isEmpty()) return@runCatching emptyList()
+
         val variants = mutableListOf<StoreApp>()
         var successfulSources = 0
 
-        sources.forEach { source ->
+        activeSources.forEach { source ->
             runCatching { loadSource(source) }
                 .onSuccess { apps ->
                     successfulSources++
@@ -74,7 +95,7 @@ class AppRepository(context: Context) {
 
         if (successfulSources == 0) {
             val cached = loadCachedApps()
-            check(cached.isNotEmpty()) { "Keine App-Quelle konnte geladen werden und es ist kein Cache verfügbar." }
+            check(cached.isNotEmpty()) { "Keine aktivierte App-Quelle konnte geladen werden und es ist kein Cache verfügbar." }
             return@runCatching cached
         }
 
@@ -365,9 +386,13 @@ class AppRepository(context: Context) {
         return base + path.removePrefix("/")
     }
 
+    private fun sourcePreferenceKey(source: AppSource): String =
+        "enabled_${source.name}"
+
     companion object {
         private const val CACHE_PREFERENCES = "luma_store_app_cache"
         private const val CACHE_KEY_APPS = "apps_json"
         private const val CACHE_KEY_TIMESTAMP = "updated_at"
+        private const val SOURCE_PREFERENCES = "luma_store_repository_settings"
     }
 }
