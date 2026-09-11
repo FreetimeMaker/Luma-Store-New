@@ -19,7 +19,7 @@ data class StoreApp(
     val sourceName: String
 )
 
-private enum class SourceType {
+internal enum class SourceType {
     FDROID_V1,
     LUMA_API
 }
@@ -44,24 +44,22 @@ class AppRepository {
     )
 
     fun loadApps(): Result<List<StoreApp>> = runCatching {
-        val merged = LinkedHashMap<String, StoreApp>()
+        val variants = mutableListOf<StoreApp>()
         var successfulSources = 0
 
         sources.forEach { source ->
             runCatching { loadSource(source) }
                 .onSuccess { apps ->
                     successfulSources++
-                    apps.forEach { app ->
-                        val current = merged[app.id]
-                        if (current == null || app.versionCode > current.versionCode) {
-                            merged[app.id] = app
-                        }
-                    }
+                    variants += apps
                 }
         }
 
         check(successfulSources > 0) { "Keine App-Quelle konnte geladen werden." }
-        merged.values.sortedBy { it.name.lowercase() }
+
+        variants
+            .distinctBy { "${it.id}\u0000${it.sourceName}" }
+            .sortedWith(compareBy<StoreApp> { it.name.lowercase() }.thenBy { it.sourceName.lowercase() })
     }
 
     private fun loadSource(source: AppSource): List<StoreApp> {
@@ -107,7 +105,6 @@ class AppRepository {
                 }
             }
 
-            // The Android app can only install Android builds. Ignore entries without one.
             val platform = androidPlatform ?: continue
             val downloadUrl = platform.optString("download_url").trim()
             if (downloadUrl.isBlank()) continue
