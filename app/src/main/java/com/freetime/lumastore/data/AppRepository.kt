@@ -28,7 +28,8 @@ internal enum class SourceType {
 data class AppSource(
     val name: String,
     val indexUrl: String,
-    internal val type: SourceType = SourceType.FDROID_V1
+    internal val type: SourceType = SourceType.FDROID_V1,
+    val custom: Boolean = false
 )
 
 class AppRepository(context: Context) {
@@ -41,7 +42,7 @@ class AppRepository(context: Context) {
         Context.MODE_PRIVATE
     )
 
-    val sources = listOf(
+    private val defaultSources = listOf(
         AppSource(
             name = "Freetime F-Droid Repository",
             indexUrl = "https://fdroid.free-time.me/repo/index-v1.json"
@@ -57,6 +58,9 @@ class AppRepository(context: Context) {
         )
     )
 
+    val sources: List<AppSource>
+        get() = defaultSources + loadCustomSources()
+
     fun isSourceEnabled(source: AppSource): Boolean =
         sourcePreferences.getBoolean(sourcePreferenceKey(source), true)
 
@@ -67,6 +71,50 @@ class AppRepository(context: Context) {
     }
 
     fun enabledSources(): List<AppSource> = sources.filter(::isSourceEnabled)
+
+    fun isCustomSource(source: AppSource): Boolean = source.custom
+
+    fun addCustomSource(name: String, repositoryUrl: String): Result<AppSource> = runCatching {
+        val cleanName = name.trim()
+        require(cleanName.isNotBlank()) { "Bitte gib einen Namen für die Quelle ein." }
+
+        val indexUrl = normalizeFdroidUrl(repositoryUrl)
+        val parsed = URL(indexUrl)
+        require(parsed.protocol == "https" || parsed.protocol == "http") {
+            "Die URL muss mit http:// oder https:// beginnen."
+        }
+
+        val existingSources = sources
+        require(existingSources.none { it.name.equals(cleanName, ignoreCase = true) }) {
+            "Eine Quelle mit diesem Namen existiert bereits."
+        }
+        require(existingSources.none { it.indexUrl.equals(indexUrl, ignoreCase = true) }) {
+            "Dieses Repository wurde bereits hinzugefügt."
+        }
+
+        val source = AppSource(
+            name = cleanName,
+            indexUrl = indexUrl,
+            type = SourceType.FDROID_V1,
+            custom = true
+        )
+
+        val updated = loadCustomSources() + source
+        saveCustomSources(updated)
+        setSourceEnabled(source, true)
+        source
+    }
+
+    fun removeCustomSource(source: AppSource): Boolean {
+        if (!source.custom) return false
+
+        val updated = loadCustomSources().filterNot {
+            it.name == source.name && it.indexUrl == source.indexUrl
+        }
+        saveCustomSources(updated)
+        sourcePreferences.edit().remove(sourcePreferenceKey(source)).apply()
+        return true
+    }
 
     fun loadCachedApps(): List<StoreApp> {
         val raw = cachePreferences.getString(CACHE_KEY_APPS, null) ?: return emptyList()
@@ -105,6 +153,51 @@ class AppRepository(context: Context) {
 
         saveCache(normalized)
         normalized
+    }
+
+    private fun loadCustomSources(): List<AppSource> {
+        val raw = sourcePreferences.getString(CUSTOM_SOURCES_KEY, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (i in 0 until array.length()) {
+                    val item = array.optJSONObject(i) ?: continue
+                    val name = item.optString("name").trim()
+                    val indexUrl = item.optString("indexUrl").trim()
+                    if (name.isBlank() || indexUrl.isBlank()) continue
+                    add(
+                        AppSource(
+                            name = name,
+                            indexUrl = indexUrl,
+                            type = SourceType.FDROID_V1,
+                            custom = true
+                        )
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun saveCustomSources(sources: List<AppSource>) {
+        val array = JSONArray()
+        sources.forEach { source ->
+            array.put(
+                JSONObject()
+                    .put("name", source.name)
+                    .put("indexUrl", source.indexUrl)
+            )
+        }
+        sourcePreferences.edit().putString(CUSTOM_SOURCES_KEY, array.toString()).apply()
+    }
+
+    private fun normalizeFdroidUrl(rawUrl: String): String {
+        val clean = rawUrl.trim()
+        require(clean.isNotBlank()) { "Bitte gib eine Repository-URL ein." }
+        return when {
+            clean.endsWith("/index-v1.json", ignoreCase = true) -> clean
+            clean.endsWith("index-v1.json", ignoreCase = true) -> clean
+            else -> clean.trimEnd('/') + "/index-v1.json"
+        }
     }
 
     private fun saveCache(apps: List<StoreApp>) {
@@ -394,5 +487,6 @@ class AppRepository(context: Context) {
         private const val CACHE_KEY_APPS = "apps_json"
         private const val CACHE_KEY_TIMESTAMP = "updated_at"
         private const val SOURCE_PREFERENCES = "luma_store_repository_settings"
+        private const val CUSTOM_SOURCES_KEY = "custom_sources_json"
     }
 }
