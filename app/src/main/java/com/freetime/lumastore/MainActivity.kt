@@ -14,7 +14,7 @@ import com.freetime.lumastore.install.ApkInstaller
 import com.freetime.lumastore.ui.theme.LumaStoreTheme
 
 class MainActivity : ComponentActivity() {
-    private val repository = AppRepository()
+    private val repository by lazy { AppRepository(applicationContext) }
     private val installedAppsRevision = mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
