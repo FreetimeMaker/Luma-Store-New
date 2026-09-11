@@ -1,5 +1,6 @@
 package com.freetime.lumastore.data
 
+import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -30,7 +31,12 @@ data class AppSource(
     internal val type: SourceType = SourceType.FDROID_V1
 )
 
-class AppRepository {
+class AppRepository(context: Context) {
+    private val cachePreferences = context.applicationContext.getSharedPreferences(
+        CACHE_PREFERENCES,
+        Context.MODE_PRIVATE
+    )
+
     val sources = listOf(
         AppSource(
             name = "Freetime F-Droid Repository",
@@ -47,6 +53,13 @@ class AppRepository {
         )
     )
 
+    fun loadCachedApps(): List<StoreApp> {
+        val raw = cachePreferences.getString(CACHE_KEY_APPS, null) ?: return emptyList()
+        return runCatching { parseCachedApps(raw) }.getOrDefault(emptyList())
+    }
+
+    fun cacheTimestamp(): Long = cachePreferences.getLong(CACHE_KEY_TIMESTAMP, 0L)
+
     fun loadApps(): Result<List<StoreApp>> = runCatching {
         val variants = mutableListOf<StoreApp>()
         var successfulSources = 0
@@ -59,11 +72,72 @@ class AppRepository {
                 }
         }
 
-        check(successfulSources > 0) { "Keine App-Quelle konnte geladen werden." }
+        if (successfulSources == 0) {
+            val cached = loadCachedApps()
+            check(cached.isNotEmpty()) { "Keine App-Quelle konnte geladen werden und es ist kein Cache verfügbar." }
+            return@runCatching cached
+        }
 
-        variants
+        val normalized = variants
             .distinctBy { "${it.id}\u0000${it.sourceName}" }
             .sortedWith(compareBy<StoreApp> { it.name.lowercase() }.thenBy { it.sourceName.lowercase() })
+
+        saveCache(normalized)
+        normalized
+    }
+
+    private fun saveCache(apps: List<StoreApp>) {
+        val array = JSONArray()
+        apps.forEach { app ->
+            array.put(
+                JSONObject()
+                    .put("id", app.id)
+                    .put("name", app.name)
+                    .put("summary", app.summary)
+                    .put("description", app.description)
+                    .put("version", app.version)
+                    .put("versionCode", app.versionCode)
+                    .put("iconUrl", app.iconUrl)
+                    .put("screenshotUrls", JSONArray(app.screenshotUrls))
+                    .put("categories", JSONArray(app.categories))
+                    .put("apkUrl", app.apkUrl)
+                    .put("sourceName", app.sourceName)
+            )
+        }
+
+        cachePreferences.edit()
+            .putString(CACHE_KEY_APPS, array.toString())
+            .putLong(CACHE_KEY_TIMESTAMP, System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun parseCachedApps(raw: String): List<StoreApp> {
+        val array = JSONArray(raw)
+        return buildList {
+            for (i in 0 until array.length()) {
+                val app = array.optJSONObject(i) ?: continue
+                val id = app.optString("id")
+                val apkUrl = app.optString("apkUrl")
+                val sourceName = app.optString("sourceName")
+                if (id.isBlank() || apkUrl.isBlank() || sourceName.isBlank()) continue
+
+                add(
+                    StoreApp(
+                        id = id,
+                        name = app.optString("name").ifBlank { id.substringAfterLast('.') },
+                        summary = app.optString("summary"),
+                        description = app.optString("description"),
+                        version = app.optString("version"),
+                        versionCode = app.optLong("versionCode", 0L),
+                        iconUrl = app.optString("iconUrl").takeIf { it.isNotBlank() && it != "null" },
+                        screenshotUrls = jsonStrings(app.optJSONArray("screenshotUrls")),
+                        categories = jsonStrings(app.optJSONArray("categories")),
+                        apkUrl = apkUrl,
+                        sourceName = sourceName
+                    )
+                )
+            }
+        }
     }
 
     private fun loadSource(source: AppSource): List<StoreApp> {
@@ -289,5 +363,11 @@ class AppRepository {
         if (path.startsWith("http://") || path.startsWith("https://")) return path
         val base = indexUrl.substringBeforeLast('/') + "/"
         return base + path.removePrefix("/")
+    }
+
+    companion object {
+        private const val CACHE_PREFERENCES = "luma_store_app_cache"
+        private const val CACHE_KEY_APPS = "apps_json"
+        private const val CACHE_KEY_TIMESTAMP = "updated_at"
     }
 }
