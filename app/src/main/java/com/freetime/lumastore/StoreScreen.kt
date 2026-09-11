@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,6 +41,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +55,7 @@ import coil3.compose.AsyncImage
 import com.freetime.lumastore.data.AppRepository
 import com.freetime.lumastore.data.StoreApp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class AppAction {
@@ -99,6 +102,8 @@ fun StoreScreen(
     var refreshKey by remember { mutableIntStateOf(0) }
     var storeView by remember { mutableStateOf(StoreView.APPS) }
     val selectedSources = remember { mutableStateMapOf<String, String>() }
+    val categoryListState = rememberLazyListState()
+    val categoryScrollScope = rememberCoroutineScope()
 
     LaunchedEffect(refreshKey) {
         if (apps.isEmpty()) {
@@ -225,22 +230,56 @@ fun StoreScreen(
 
             if (categories.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        FilterChip(
-                            selected = selectedCategory == null,
-                            onClick = { selectedCategory = null },
-                            label = { Text("Alle Kategorien") }
-                        )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = {
+                            categoryScrollScope.launch {
+                                val target = (categoryListState.firstVisibleItemIndex - 3).coerceAtLeast(0)
+                                categoryListState.animateScrollToItem(target)
+                            }
+                        },
+                        enabled = categoryListState.canScrollBackward
+                    ) {
+                        Text("‹")
                     }
-                    items(categories, key = { it }) { category ->
-                        FilterChip(
-                            selected = selectedCategory == category,
-                            onClick = {
-                                selectedCategory = if (selectedCategory == category) null else category
-                            },
-                            label = { Text(category) }
-                        )
+
+                    LazyRow(
+                        state = categoryListState,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = selectedCategory == null,
+                                onClick = { selectedCategory = null },
+                                label = { Text("Alle Kategorien") }
+                            )
+                        }
+                        items(categories, key = { it }) { category ->
+                            FilterChip(
+                                selected = selectedCategory == category,
+                                onClick = {
+                                    selectedCategory = if (selectedCategory == category) null else category
+                                },
+                                label = { Text(category) }
+                            )
+                        }
+                    }
+
+                    TextButton(
+                        onClick = {
+                            categoryScrollScope.launch {
+                                val target = (categoryListState.firstVisibleItemIndex + 3)
+                                    .coerceAtMost(categories.size)
+                                categoryListState.animateScrollToItem(target)
+                            }
+                        },
+                        enabled = categoryListState.canScrollForward
+                    ) {
+                        Text("›")
                     }
                 }
             }
