@@ -20,7 +20,7 @@ data class StoreApp(
     val sourceName: String
 )
 
-internal enum class SourceType {
+enum class SourceType {
     FDROID_V1,
     LUMA_API
 }
@@ -28,7 +28,7 @@ internal enum class SourceType {
 data class AppSource(
     val name: String,
     val indexUrl: String,
-    internal val type: SourceType = SourceType.FDROID_V1,
+    val type: SourceType = SourceType.FDROID_V1,
     val custom: Boolean = false
 )
 
