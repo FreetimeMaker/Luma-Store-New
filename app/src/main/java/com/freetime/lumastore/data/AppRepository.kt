@@ -37,6 +37,10 @@ class AppRepository {
             indexUrl = "https://fdroid.free-time.me/repo/index-v1.json"
         ),
         AppSource(
+            name = "F-Droid Repository",
+            indexUrl = "https://f-droid.org/repo/index-v1.json"
+        ),
+        AppSource(
             name = "Luma Store API",
             indexUrl = "https://api.free-time.me/v2/lumastore/apps",
             type = SourceType.LUMA_API
