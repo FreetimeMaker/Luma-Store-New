@@ -8,7 +8,24 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.weight
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.freetime.lumastore.data.AppRepository
 import com.freetime.lumastore.install.ApkInstaller
 import com.freetime.lumastore.ui.theme.LumaStoreTheme
@@ -22,26 +39,52 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val revision = installedAppsRevision.intValue
+            var showSettings by rememberSaveable { mutableStateOf(false) }
+
             LumaStoreTheme {
-                StoreScreen(
-                    repository = repository,
-                    installedAppsRevision = revision,
-                    installedVersionCode = { packageName -> installedVersionCode(packageName) },
-                    installedVersionName = { packageName -> installedVersionName(packageName) },
-                    openInstalledApp = { packageName -> openInstalledApp(packageName) },
-                    canInstallPackages = { canInstallUnknownApps() },
-                    requestInstallPermission = { openInstallPermission() },
-                    install = { app, onProgress, onReady, onError ->
-                        ApkInstaller.downloadAndInstall(
-                            context = this,
-                            packageName = app.id,
-                            apkUrl = app.apkUrl,
-                            onProgress = { runOnUiThread { onProgress(it) } },
-                            onReady = { runOnUiThread(onReady) },
-                            onError = { error -> runOnUiThread { onError(error) } }
-                        )
+                if (showSettings) {
+                    SettingsScreen(
+                        repository = repository,
+                        onBack = { showSettings = false },
+                        onSourcesChanged = { }
+                    )
+                } else {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { showSettings = true }) {
+                                Text("Einstellungen")
+                            }
+                        }
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            StoreScreen(
+                                repository = repository,
+                                installedAppsRevision = revision,
+                                installedVersionCode = { packageName -> installedVersionCode(packageName) },
+                                installedVersionName = { packageName -> installedVersionName(packageName) },
+                                openInstalledApp = { packageName -> openInstalledApp(packageName) },
+                                canInstallPackages = { canInstallUnknownApps() },
+                                requestInstallPermission = { openInstallPermission() },
+                                install = { app, onProgress, onReady, onError ->
+                                    ApkInstaller.downloadAndInstall(
+                                        context = this@MainActivity,
+                                        packageName = app.id,
+                                        apkUrl = app.apkUrl,
+                                        onProgress = { runOnUiThread { onProgress(it) } },
+                                        onReady = { runOnUiThread(onReady) },
+                                        onError = { error -> runOnUiThread { onError(error) } }
+                                    )
+                                }
+                            )
+                        }
                     }
-                )
+                }
             }
         }
     }
