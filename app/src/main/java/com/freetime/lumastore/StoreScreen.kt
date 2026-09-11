@@ -1,5 +1,6 @@
 package com.freetime.lumastore
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,9 @@ private enum class StoreView {
     UPDATES
 }
 
+private const val SOURCE_PREFERENCES = "luma_store_source_preferences"
+private const val SOURCE_KEY_PREFIX = "source_"
+
 @Composable
 fun StoreScreen(
     repository: AppRepository,
@@ -74,6 +79,11 @@ fun StoreScreen(
     requestInstallPermission: () -> Unit,
     install: (StoreApp, (Int) -> Unit, () -> Unit, (Throwable) -> Unit) -> Unit
 ) {
+    val context = LocalContext.current
+    val sourcePreferences = remember(context) {
+        context.applicationContext.getSharedPreferences(SOURCE_PREFERENCES, Context.MODE_PRIVATE)
+    }
+
     var apps by remember { mutableStateOf<List<StoreApp>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -100,6 +110,28 @@ fun StoreScreen(
     }
 
     val variantsById = apps.groupBy { it.id }
+
+    LaunchedEffect(apps) {
+        variantsById.forEach { (id, variants) ->
+            val savedSource = sourcePreferences.getString(sourcePreferenceKey(id), null)
+            if (savedSource != null && variants.any { it.sourceName == savedSource }) {
+                selectedSources[id] = savedSource
+            } else {
+                selectedSources.remove(id)
+                if (savedSource != null) {
+                    sourcePreferences.edit().remove(sourcePreferenceKey(id)).apply()
+                }
+            }
+        }
+    }
+
+    fun selectSource(appId: String, sourceName: String) {
+        selectedSources[appId] = sourceName
+        sourcePreferences.edit()
+            .putString(sourcePreferenceKey(appId), sourceName)
+            .apply()
+    }
+
     val selectedApps = variantsById.mapNotNull { (id, variants) ->
         val selectedSource = selectedSources[id]
         variants.firstOrNull { it.sourceName == selectedSource }
@@ -260,9 +292,7 @@ fun StoreScreen(
                             installing = installingKey == currentInstallKey,
                             progress = installProgress,
                             onOpenDetails = { selectedAppId = app.id },
-                            onSourceSelected = { source ->
-                                selectedSources[app.id] = source.sourceName
-                            },
+                            onSourceSelected = { source -> selectSource(app.id, source.sourceName) },
                             onAction = {
                                 if (action == AppAction.OPEN) {
                                     if (!openInstalledApp(app.id)) {
@@ -320,7 +350,7 @@ fun StoreScreen(
                                 items(variants, key = { it.sourceName }) { variant ->
                                     FilterChip(
                                         selected = variant.sourceName == app.sourceName,
-                                        onClick = { selectedSources[appId] = variant.sourceName },
+                                        onClick = { selectSource(appId, variant.sourceName) },
                                         label = { Text("${variant.sourceName} • ${variant.version}") }
                                     )
                                 }
@@ -501,4 +531,6 @@ private fun AppIcon(app: StoreApp, size: Int) {
     }
 }
 
-private fun variantKey(app: StoreApp): String = "${app.id}\u0000${app.sourceName}"
+private fun sourcePreferenceKey(appId: String): String = SOURCE_KEY_PREFIX + appId
+
+private fun variantKey(app: StoreApp): String = "${app.id}|${app.sourceName}"
