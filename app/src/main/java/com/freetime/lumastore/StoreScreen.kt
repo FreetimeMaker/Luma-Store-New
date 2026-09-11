@@ -2,6 +2,7 @@ package com.freetime.lumastore
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,6 +91,7 @@ fun StoreScreen(
     var query by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var selectedAppId by remember { mutableStateOf<String?>(null) }
+    var selectedScreenshotUrl by remember { mutableStateOf<String?>(null) }
     var installingKey by remember { mutableStateOf<String?>(null) }
     var installProgress by remember { mutableIntStateOf(0) }
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -369,6 +371,11 @@ fun StoreScreen(
 
                         if (app.screenshotUrls.isNotEmpty()) {
                             Text("Screenshots", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Zum Vergrößern antippen",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(app.screenshotUrls) { url ->
                                     AsyncImage(
@@ -379,6 +386,7 @@ fun StoreScreen(
                                             .width(140.dp)
                                             .height(250.dp)
                                             .clip(RoundedCornerShape(12.dp))
+                                            .clickable { selectedScreenshotUrl = url }
                                     )
                                 }
                             }
@@ -394,6 +402,36 @@ fun StoreScreen(
                 confirmButton = { TextButton(onClick = { selectedAppId = null }) { Text("Schließen") } }
             )
         }
+    }
+
+    selectedScreenshotUrl?.let { screenshotUrl ->
+        AlertDialog(
+            onDismissRequest = { selectedScreenshotUrl = null },
+            title = { Text("Screenshot") },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 650.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = screenshotUrl,
+                        contentDescription = "Vergrößerter Screenshot",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 650.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedScreenshotUrl = null }) {
+                    Text("Schließen")
+                }
+            }
+        )
     }
 }
 
@@ -522,15 +560,11 @@ private fun AppIcon(app: StoreApp, size: Int) {
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                app.name.firstOrNull()?.uppercase() ?: "?",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Text(app.name.take(1).uppercase(), fontWeight = FontWeight.Bold)
         }
     }
 }
 
-private fun sourcePreferenceKey(appId: String): String = SOURCE_KEY_PREFIX + appId
+private fun variantKey(app: StoreApp): String = "${app.id}\u0000${app.sourceName}"
 
-private fun variantKey(app: StoreApp): String = "${app.id}|${app.sourceName}"
+private fun sourcePreferenceKey(appId: String): String = SOURCE_KEY_PREFIX + appId
