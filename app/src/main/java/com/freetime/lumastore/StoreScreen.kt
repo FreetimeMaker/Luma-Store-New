@@ -97,6 +97,7 @@ fun StoreScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var selectedSourceFilter by remember { mutableStateOf<String?>(null) }
     var selectedAppId by remember { mutableStateOf<String?>(null) }
     var selectedScreenshotUrl by remember { mutableStateOf<String?>(null) }
     var installingKey by remember { mutableStateOf<String?>(null) }
@@ -129,6 +130,10 @@ fun StoreScreen(
     }
 
     val variantsById = apps.groupBy { it.id }
+    val availableSources = apps
+        .map { it.sourceName }
+        .distinct()
+        .sortedBy { it.lowercase() }
 
     LaunchedEffect(apps) {
         variantsById.forEach { (id, variants) ->
@@ -142,6 +147,10 @@ fun StoreScreen(
                 }
             }
         }
+
+        if (selectedSourceFilter != null && selectedSourceFilter !in availableSources) {
+            selectedSourceFilter = null
+        }
     }
 
     fun selectSource(appId: String, sourceName: String) {
@@ -152,9 +161,13 @@ fun StoreScreen(
     }
 
     val selectedApps = variantsById.mapNotNull { (id, variants) ->
-        val selectedSource = selectedSources[id]
-        variants.firstOrNull { it.sourceName == selectedSource }
-            ?: variants.maxByOrNull { it.versionCode }
+        if (selectedSourceFilter != null) {
+            variants.firstOrNull { it.sourceName == selectedSourceFilter }
+        } else {
+            val selectedSource = selectedSources[id]
+            variants.firstOrNull { it.sourceName == selectedSource }
+                ?: variants.maxByOrNull { it.versionCode }
+        }
     }.sortedBy { it.name.lowercase() }
 
     val updateCount = selectedApps.count { app ->
@@ -229,6 +242,34 @@ fun StoreScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (availableSources.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Quelle",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = selectedSourceFilter == null,
+                            onClick = { selectedSourceFilter = null },
+                            label = { Text("Alle Quellen") }
+                        )
+                    }
+                    items(availableSources, key = { it }) { sourceName ->
+                        FilterChip(
+                            selected = selectedSourceFilter == sourceName,
+                            onClick = {
+                                selectedSourceFilter = if (selectedSourceFilter == sourceName) null else sourceName
+                            },
+                            label = { Text(sourceName) }
+                        )
+                    }
+                }
+            }
 
             if (categories.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
@@ -325,7 +366,11 @@ fun StoreScreen(
                 ) {
                     item {
                         Text(
-                            "${filtered.size} Apps • ${repository.sources.joinToString { it.name }}",
+                            buildString {
+                                append(filtered.size)
+                                append(" Apps • ")
+                                append(selectedSourceFilter ?: "Alle Quellen")
+                            },
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -384,8 +429,12 @@ fun StoreScreen(
     selectedAppId?.let { appId ->
         val variants = variantsById[appId].orEmpty().sortedBy { it.sourceName.lowercase() }
         val selectedSource = selectedSources[appId]
-        val app = variants.firstOrNull { it.sourceName == selectedSource }
-            ?: variants.maxByOrNull { it.versionCode }
+        val app = if (selectedSourceFilter != null) {
+            variants.firstOrNull { it.sourceName == selectedSourceFilter }
+        } else {
+            variants.firstOrNull { it.sourceName == selectedSource }
+                ?: variants.maxByOrNull { it.versionCode }
+        }
 
         if (app != null) {
             AlertDialog(
@@ -401,7 +450,7 @@ fun StoreScreen(
                     ) {
                         AppIcon(app = app, size = 80)
 
-                        if (variants.size > 1) {
+                        if (variants.size > 1 && selectedSourceFilter == null) {
                             Text("Quelle wählen", fontWeight = FontWeight.SemiBold)
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(variants, key = { it.sourceName }) { variant ->
