@@ -103,8 +103,8 @@ jobs:
       - name: Upload APK as build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Luma-Store.jks-v${{ needs.prepare_android_app.outputs.version }}.apk
-          path: Luma-Store.jks-v${{ needs.prepare_android_app.outputs.version }}.apk
+          name: Luma-Store-v${{ needs.prepare_android_app.outputs.version }}.apk
+          path: Luma-Store-v${{ needs.prepare_android_app.outputs.version }}.apk
           if-no-files-found: error
           retention-days: 90
 
