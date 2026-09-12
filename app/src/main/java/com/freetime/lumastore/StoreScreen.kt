@@ -70,6 +70,12 @@ private enum class StoreView {
     UPDATES
 }
 
+private enum class SourceCodeFilter {
+    ALL,
+    OPEN_SOURCE,
+    CLOSED_SOURCE
+}
+
 private const val SOURCE_PREFERENCES = "luma_store_source_preferences"
 private const val SOURCE_KEY_PREFIX = "source_"
 
@@ -98,6 +104,7 @@ fun StoreScreen(
     var query by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var selectedSourceFilter by remember { mutableStateOf<String?>(null) }
+    var sourceCodeFilter by remember { mutableStateOf(SourceCodeFilter.ALL) }
     var selectedAppId by remember { mutableStateOf<String?>(null) }
     var selectedScreenshotUrl by remember { mutableStateOf<String?>(null) }
     var installingKey by remember { mutableStateOf<String?>(null) }
@@ -135,6 +142,12 @@ fun StoreScreen(
         .distinct()
         .sortedBy { it.lowercase() }
 
+    fun matchesSourceCodeFilter(app: StoreApp): Boolean = when (sourceCodeFilter) {
+        SourceCodeFilter.ALL -> true
+        SourceCodeFilter.OPEN_SOURCE -> !app.closedSource
+        SourceCodeFilter.CLOSED_SOURCE -> app.closedSource
+    }
+
     LaunchedEffect(apps) {
         variantsById.forEach { (id, variants) ->
             val savedSource = sourcePreferences.getString(sourcePreferenceKey(id), null)
@@ -161,12 +174,16 @@ fun StoreScreen(
     }
 
     val selectedApps = variantsById.mapNotNull { (id, variants) ->
-        if (selectedSourceFilter != null) {
-            variants.firstOrNull { it.sourceName == selectedSourceFilter }
+        val matchingVariants = variants.filter { variant ->
+            val matchesSource = selectedSourceFilter == null || variant.sourceName == selectedSourceFilter
+            matchesSource && matchesSourceCodeFilter(variant)
+        }
+        if (matchingVariants.isEmpty()) {
+            null
         } else {
             val selectedSource = selectedSources[id]
-            variants.firstOrNull { it.sourceName == selectedSource }
-                ?: variants.maxByOrNull { it.versionCode }
+            matchingVariants.firstOrNull { it.sourceName == selectedSource }
+                ?: matchingVariants.maxByOrNull { it.versionCode }
         }
     }.sortedBy { it.name.lowercase() }
 
@@ -242,6 +259,37 @@ fun StoreScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Quellcode",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    FilterChip(
+                        selected = sourceCodeFilter == SourceCodeFilter.ALL,
+                        onClick = { sourceCodeFilter = SourceCodeFilter.ALL },
+                        label = { Text("Alle Apps") }
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = sourceCodeFilter == SourceCodeFilter.OPEN_SOURCE,
+                        onClick = { sourceCodeFilter = SourceCodeFilter.OPEN_SOURCE },
+                        label = { Text("Open Source") }
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = sourceCodeFilter == SourceCodeFilter.CLOSED_SOURCE,
+                        onClick = { sourceCodeFilter = SourceCodeFilter.CLOSED_SOURCE },
+                        label = { Text("Closed Source") }
+                    )
+                }
+            }
 
             if (availableSources.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
@@ -355,7 +403,19 @@ fun StoreScreen(
                     Text("Keine Updates verfügbar", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Deine installierten Apps sind für die gewählten Quellen aktuell.",
+                        "Deine installierten Apps sind für die gewählten Filter aktuell.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                filtered.isEmpty() -> Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Keine Apps gefunden", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Für die gewählten Filter sind keine Apps verfügbar.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -370,13 +430,25 @@ fun StoreScreen(
                                 append(filtered.size)
                                 append(" Apps • ")
                                 append(selectedSourceFilter ?: "Alle Quellen")
+                                append(" • ")
+                                append(
+                                    when (sourceCodeFilter) {
+                                        SourceCodeFilter.ALL -> "Open & Closed Source"
+                                        SourceCodeFilter.OPEN_SOURCE -> "Open Source"
+                                        SourceCodeFilter.CLOSED_SOURCE -> "Closed Source"
+                                    }
+                                )
                             },
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     items(filtered, key = { it.id }) { app ->
-                        val variants = variantsById[app.id].orEmpty().sortedBy { it.sourceName.lowercase() }
+                        val variants = variantsById[app.id]
+                            .orEmpty()
+                            .filter(::matchesSourceCodeFilter)
+                            .filter { selectedSourceFilter == null || it.sourceName == selectedSourceFilter }
+                            .sortedBy { it.sourceName.lowercase() }
                         val installedCode = installedVersionCode(app.id)
                         val installedName = installedVersionName(app.id)
                         val action = when {
@@ -427,14 +499,14 @@ fun StoreScreen(
     }
 
     selectedAppId?.let { appId ->
-        val variants = variantsById[appId].orEmpty().sortedBy { it.sourceName.lowercase() }
+        val variants = variantsById[appId]
+            .orEmpty()
+            .filter(::matchesSourceCodeFilter)
+            .filter { selectedSourceFilter == null || it.sourceName == selectedSourceFilter }
+            .sortedBy { it.sourceName.lowercase() }
         val selectedSource = selectedSources[appId]
-        val app = if (selectedSourceFilter != null) {
-            variants.firstOrNull { it.sourceName == selectedSourceFilter }
-        } else {
-            variants.firstOrNull { it.sourceName == selectedSource }
-                ?: variants.maxByOrNull { it.versionCode }
-        }
+        val app = variants.firstOrNull { it.sourceName == selectedSource }
+            ?: variants.maxByOrNull { it.versionCode }
 
         if (app != null) {
             AlertDialog(
@@ -449,6 +521,13 @@ fun StoreScreen(
                             .verticalScroll(rememberScrollState())
                     ) {
                         AppIcon(app = app, size = 80)
+
+                        Text(
+                            if (app.closedSource) "Closed Source" else "Open Source",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (app.closedSource) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
 
                         if (variants.size > 1 && selectedSourceFilter == null) {
                             Text("Quelle wählen", fontWeight = FontWeight.SemiBold)
@@ -655,6 +734,12 @@ private fun AppCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (app.closedSource) "Closed Source" else "Open Source",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (app.closedSource) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
                     Text(
                         buildString {
                             append(app.version)
