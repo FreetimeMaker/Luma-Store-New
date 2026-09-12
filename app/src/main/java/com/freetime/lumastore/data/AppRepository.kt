@@ -17,7 +17,22 @@ data class StoreApp(
     val screenshotUrls: List<String>,
     val categories: List<String>,
     val apkUrl: String,
-    val sourceName: String
+    val sourceName: String,
+    val authorName: String? = null,
+    val authorEmail: String? = null,
+    val authorWebsite: String? = null,
+    val websiteUrl: String? = null,
+    val sourceCodeUrl: String? = null,
+    val issueTrackerUrl: String? = null,
+    val translationUrl: String? = null,
+    val changelogUrl: String? = null,
+    val donationUrls: List<String> = emptyList(),
+    val liberapay: String? = null,
+    val openCollective: String? = null,
+    val bitcoin: String? = null,
+    val litecoin: String? = null,
+    val license: String? = null,
+    val antiFeatures: List<String> = emptyList()
 )
 
 enum class SourceType {
@@ -220,6 +235,21 @@ class AppRepository(context: Context) {
                     .put("categories", JSONArray(app.categories))
                     .put("apkUrl", app.apkUrl)
                     .put("sourceName", app.sourceName)
+                    .put("authorName", app.authorName)
+                    .put("authorEmail", app.authorEmail)
+                    .put("authorWebsite", app.authorWebsite)
+                    .put("websiteUrl", app.websiteUrl)
+                    .put("sourceCodeUrl", app.sourceCodeUrl)
+                    .put("issueTrackerUrl", app.issueTrackerUrl)
+                    .put("translationUrl", app.translationUrl)
+                    .put("changelogUrl", app.changelogUrl)
+                    .put("donationUrls", JSONArray(app.donationUrls))
+                    .put("liberapay", app.liberapay)
+                    .put("openCollective", app.openCollective)
+                    .put("bitcoin", app.bitcoin)
+                    .put("litecoin", app.litecoin)
+                    .put("license", app.license)
+                    .put("antiFeatures", JSONArray(app.antiFeatures))
             )
         }
 
@@ -247,11 +277,26 @@ class AppRepository(context: Context) {
                         description = app.optString("description"),
                         version = app.optString("version"),
                         versionCode = app.optLong("versionCode", 0L),
-                        iconUrl = app.optString("iconUrl").takeIf { it.isNotBlank() && it != "null" },
+                        iconUrl = nullableString(app, "iconUrl"),
                         screenshotUrls = jsonStrings(app.optJSONArray("screenshotUrls")),
                         categories = jsonStrings(app.optJSONArray("categories")),
                         apkUrl = apkUrl,
-                        sourceName = sourceName
+                        sourceName = sourceName,
+                        authorName = nullableString(app, "authorName"),
+                        authorEmail = nullableString(app, "authorEmail"),
+                        authorWebsite = nullableString(app, "authorWebsite"),
+                        websiteUrl = nullableString(app, "websiteUrl"),
+                        sourceCodeUrl = nullableString(app, "sourceCodeUrl"),
+                        issueTrackerUrl = nullableString(app, "issueTrackerUrl"),
+                        translationUrl = nullableString(app, "translationUrl"),
+                        changelogUrl = nullableString(app, "changelogUrl"),
+                        donationUrls = jsonStrings(app.optJSONArray("donationUrls")),
+                        liberapay = nullableString(app, "liberapay"),
+                        openCollective = nullableString(app, "openCollective"),
+                        bitcoin = nullableString(app, "bitcoin"),
+                        litecoin = nullableString(app, "litecoin"),
+                        license = nullableString(app, "license"),
+                        antiFeatures = jsonStrings(app.optJSONArray("antiFeatures"))
                     )
                 )
             }
@@ -322,6 +367,8 @@ class AppRepository(context: Context) {
 
             val name = app.optString("name").ifBlank { "Unbenannte App" }
             val description = app.optString("description")
+            val summary = firstNonBlank(app.optString("short_description"), app.optString("summary"))
+                ?: description.lineSequence().firstOrNull().orEmpty().take(180)
             val version = app.optString("version").ifBlank { "1.0" }
             val versionCode = app.optLong("version_code", Long.MIN_VALUE)
                 .takeIf { it != Long.MIN_VALUE }
@@ -336,10 +383,15 @@ class AppRepository(context: Context) {
                 app.optString("iconUrl")
             )
 
+            val donationUrls = buildList {
+                firstNonBlank(app.optString("donate_url"), app.optString("donateUrl"))?.let(::add)
+                jsonStrings(app.optJSONArray("donate_urls")).forEach { if (it !in this) add(it) }
+            }
+
             result += StoreApp(
                 id = id,
                 name = name,
-                summary = description.lineSequence().firstOrNull().orEmpty().take(180),
+                summary = summary,
                 description = description,
                 version = version,
                 versionCode = versionCode,
@@ -347,7 +399,22 @@ class AppRepository(context: Context) {
                 screenshotUrls = jsonStrings(app.optJSONArray("screenshots")),
                 categories = listOfNotNull(categoryName),
                 apkUrl = downloadUrl,
-                sourceName = source.name
+                sourceName = source.name,
+                authorName = nullableString(app, "author_name"),
+                authorEmail = nullableString(app, "author_email"),
+                authorWebsite = nullableString(app, "author_website"),
+                websiteUrl = nullableString(app, "website_url"),
+                sourceCodeUrl = firstNonBlank(app.optString("source_code_url"), app.optString("repo_url")),
+                issueTrackerUrl = nullableString(app, "issue_tracker_url"),
+                translationUrl = nullableString(app, "translation_url"),
+                changelogUrl = nullableString(app, "changelog_url"),
+                donationUrls = donationUrls,
+                liberapay = nullableString(app, "liberapay"),
+                openCollective = nullableString(app, "opencollective"),
+                bitcoin = nullableString(app, "bitcoin"),
+                litecoin = nullableString(app, "litecoin"),
+                license = nullableString(app, "license_type"),
+                antiFeatures = jsonStrings(app.optJSONArray("ant_features"))
             )
         }
 
@@ -428,7 +495,22 @@ class AppRepository(context: Context) {
                 screenshotUrls = screenshotUrls,
                 categories = categories,
                 apkUrl = resolveUrl(source.indexUrl, apkName),
-                sourceName = source.name
+                sourceName = source.name,
+                authorName = firstNonBlank(metadata.optString("authorName"), metadata.optString("AuthorName")),
+                authorEmail = firstNonBlank(metadata.optString("authorEmail"), metadata.optString("AuthorEmail")),
+                authorWebsite = firstNonBlank(metadata.optString("authorWebSite"), metadata.optString("AuthorWebSite")),
+                websiteUrl = firstNonBlank(metadata.optString("webSite"), metadata.optString("WebSite")),
+                sourceCodeUrl = firstNonBlank(metadata.optString("sourceCode"), metadata.optString("SourceCode")),
+                issueTrackerUrl = firstNonBlank(metadata.optString("issueTracker"), metadata.optString("IssueTracker")),
+                translationUrl = firstNonBlank(metadata.optString("translation"), metadata.optString("Translation")),
+                changelogUrl = firstNonBlank(metadata.optString("changelog"), metadata.optString("Changelog")),
+                donationUrls = jsonStrings(metadata.optJSONArray("donate")) + jsonStrings(metadata.optJSONArray("Donate")),
+                liberapay = firstNonBlank(metadata.optString("liberapay"), metadata.optString("Liberapay")),
+                openCollective = firstNonBlank(metadata.optString("openCollective"), metadata.optString("OpenCollective")),
+                bitcoin = firstNonBlank(metadata.optString("bitcoin"), metadata.optString("Bitcoin")),
+                litecoin = firstNonBlank(metadata.optString("litecoin"), metadata.optString("Litecoin")),
+                license = firstNonBlank(metadata.optString("license"), metadata.optString("License")),
+                antiFeatures = jsonStrings(metadata.optJSONArray("antiFeatures")) + jsonStrings(metadata.optJSONArray("AntiFeatures"))
             )
         }
         return result
@@ -457,8 +539,11 @@ class AppRepository(context: Context) {
         }
     }
 
+    private fun nullableString(obj: JSONObject, key: String): String? =
+        obj.optString(key).trim().takeIf { it.isNotBlank() && it != "null" }
+
     private fun firstNonBlank(vararg values: String?): String? =
-        values.firstOrNull { !it.isNullOrBlank() }?.trim()
+        values.firstOrNull { !it.isNullOrBlank() && it != "null" }?.trim()
 
     private fun versionToCode(version: String): Long {
         val parts = Regex("\\d+").findAll(version)
