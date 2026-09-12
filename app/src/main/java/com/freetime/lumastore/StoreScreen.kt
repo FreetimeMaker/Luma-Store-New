@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,6 +85,7 @@ fun StoreScreen(
     install: (StoreApp, (Int) -> Unit, () -> Unit, (Throwable) -> Unit) -> Unit
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val sourcePreferences = remember(context) {
         context.applicationContext.getSharedPreferences(SOURCE_PREFERENCES, Context.MODE_PRIVATE)
     }
@@ -445,6 +447,57 @@ fun StoreScreen(
                             }
                         }
 
+                        val hasRichMetadata = listOf(
+                            app.authorName,
+                            app.authorEmail,
+                            app.authorWebsite,
+                            app.websiteUrl,
+                            app.sourceCodeUrl,
+                            app.issueTrackerUrl,
+                            app.translationUrl,
+                            app.changelogUrl,
+                            app.liberapay,
+                            app.openCollective,
+                            app.bitcoin,
+                            app.litecoin,
+                            app.license
+                        ).any { !it.isNullOrBlank() } || app.donationUrls.isNotEmpty() || app.antiFeatures.isNotEmpty()
+
+                        if (hasRichMetadata) {
+                            HorizontalDivider()
+                            Text("App-Informationen", fontWeight = FontWeight.SemiBold)
+
+                            app.authorName?.let { MetadataValue("Autor", it) }
+                            app.authorEmail?.let { MetadataValue("E-Mail", it) }
+                            app.authorWebsite?.let { MetadataLink("Autor-Webseite", it) { uriHandler.openUri(it) } }
+                            app.websiteUrl?.let { MetadataLink("Webseite", it) { uriHandler.openUri(it) } }
+                            app.sourceCodeUrl?.let { MetadataLink("Quellcode", it) { uriHandler.openUri(it) } }
+                            app.issueTrackerUrl?.let { MetadataLink("Issue Tracker", it) { uriHandler.openUri(it) } }
+                            app.translationUrl?.let { MetadataLink("Übersetzung", it) { uriHandler.openUri(it) } }
+                            app.changelogUrl?.let { MetadataLink("Changelog", it) { uriHandler.openUri(it) } }
+                            app.license?.let { MetadataValue("Lizenz", it) }
+
+                            if (app.donationUrls.isNotEmpty() || !app.liberapay.isNullOrBlank() || !app.openCollective.isNullOrBlank() || !app.bitcoin.isNullOrBlank() || !app.litecoin.isNullOrBlank()) {
+                                Text("Spenden", fontWeight = FontWeight.SemiBold)
+                                app.donationUrls.forEach { donationUrl ->
+                                    MetadataLink("Spenden-Link", donationUrl) { uriHandler.openUri(donationUrl) }
+                                }
+                                app.liberapay?.let { MetadataValue("Liberapay", it) }
+                                app.openCollective?.let { MetadataValue("OpenCollective", it) }
+                                app.bitcoin?.let { MetadataValue("Bitcoin", it) }
+                                app.litecoin?.let { MetadataValue("Litecoin", it) }
+                            }
+
+                            if (app.antiFeatures.isNotEmpty()) {
+                                Text("Anti-Features", fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    app.antiFeatures.joinToString(", "),
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+
                         HorizontalDivider()
                         Text("Paket: ${app.id}")
                         Text("Version: ${app.version} (${app.versionCode})")
@@ -484,6 +537,35 @@ fun StoreScreen(
                     Text("Schließen")
                 }
             }
+        )
+    }
+}
+
+@Composable
+private fun MetadataValue(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(value, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun MetadataLink(label: String, value: String, onClick: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable(onClick = onClick)
         )
     }
 }
