@@ -32,7 +32,8 @@ data class StoreApp(
     val bitcoin: String? = null,
     val litecoin: String? = null,
     val license: String? = null,
-    val antiFeatures: List<String> = emptyList()
+    val antiFeatures: List<String> = emptyList(),
+    val closedSource: Boolean = false
 )
 
 enum class SourceType {
@@ -250,6 +251,7 @@ class AppRepository(context: Context) {
                     .put("litecoin", app.litecoin)
                     .put("license", app.license)
                     .put("antiFeatures", JSONArray(app.antiFeatures))
+                    .put("closedSource", app.closedSource)
             )
         }
 
@@ -296,7 +298,8 @@ class AppRepository(context: Context) {
                         bitcoin = nullableString(app, "bitcoin"),
                         litecoin = nullableString(app, "litecoin"),
                         license = nullableString(app, "license"),
-                        antiFeatures = jsonStrings(app.optJSONArray("antiFeatures"))
+                        antiFeatures = jsonStrings(app.optJSONArray("antiFeatures")),
+                        closedSource = app.optBoolean("closedSource", false)
                     )
                 )
             }
@@ -414,7 +417,8 @@ class AppRepository(context: Context) {
                 bitcoin = nullableString(app, "bitcoin"),
                 litecoin = nullableString(app, "litecoin"),
                 license = nullableString(app, "license_type"),
-                antiFeatures = jsonStrings(app.optJSONArray("ant_features"))
+                antiFeatures = jsonStrings(app.optJSONArray("ant_features")),
+                closedSource = app.optBoolean("closed_source", false)
             )
         }
 
@@ -510,7 +514,8 @@ class AppRepository(context: Context) {
                 bitcoin = firstNonBlank(metadata.optString("bitcoin"), metadata.optString("Bitcoin")),
                 litecoin = firstNonBlank(metadata.optString("litecoin"), metadata.optString("Litecoin")),
                 license = firstNonBlank(metadata.optString("license"), metadata.optString("License")),
-                antiFeatures = jsonStrings(metadata.optJSONArray("antiFeatures")) + jsonStrings(metadata.optJSONArray("AntiFeatures"))
+                antiFeatures = jsonStrings(metadata.optJSONArray("antiFeatures")) + jsonStrings(metadata.optJSONArray("AntiFeatures")),
+                closedSource = false
             )
         }
         return result
